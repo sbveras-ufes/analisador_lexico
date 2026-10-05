@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Analisador Léxico Pascal</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- ══════════════  MENU BAR  ══════════════ -->
+<div id="menubar">
+  <div class="menu-item">Arquivo
+    <div class="dropdown">
+      <div class="dd-item" id="menu-new">Novo</div>
+      <div class="dd-item" id="menu-open">Abrir…</div>
+      <div class="dd-item" id="menu-save">Salvar</div>
+      <hr/>
+      <div class="dd-item" id="menu-exit">Sair</div>
+    </div>
+  </div>
+  <div class="menu-item">Editar
+    <div class="dropdown">
+      <div class="dd-item" id="menu-undo">Desfazer</div>
+      <div class="dd-item" id="menu-redo">Refazer</div>
+      <hr/>
+      <div class="dd-item" id="menu-selall">Selecionar tudo</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════  TOOLBAR  ══════════════ -->
+<div id="toolbar">
+  <button class="tbtn" id="tb-new"  title="Novo">&#128196;</button>
+  <button class="tbtn" id="tb-save" title="Salvar">&#128190;</button>
+  <button class="tbtn" id="tb-undo" title="Desfazer">&#10554;</button>
+  <button class="tbtn" id="tb-redo" title="Refazer">&#10555;</button>
+  <button id="btn-compile">Compilar</button>
+</div>
+
+<!-- ══════════════  MAIN SPLIT  ══════════════ -->
+<div id="main">
+
+  <!-- LEFT: tabbed symbol table / derivation tree -->
+  <div id="left-panel">
+    <div id="tab-bar">
+      <button class="tab active" id="tab-symbols">Tabela de Símbolos</button>
+      <button class="tab"        id="tab-tree">Árvore de Derivação</button>
+    </div>
+
+    <!-- Symbol Table panel -->
+    <div id="panel-symbols" class="tab-panel active">
+      <div id="symtable-wrap">
+        <table id="symtable">
+          <thead>
+            <tr>
+              <th style="width:40px">ID</th>
+              <th style="width:50px">Linha</th>
+              <th>Token</th>
+              <th style="width:88px">Lexema</th>
+            </tr>
+          </thead>
+          <tbody id="symtable-body">
+            <tr><td colspan="4" class="tbl-placeholder">Clique em <b>Compilar</b></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Derivation Tree panel -->
+    <div id="panel-tree" class="tab-panel">
+      <div id="tree-container">
+        <div class="tree-placeholder">Clique em <b>Compilar</b> para gerar a árvore de derivação.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: code editor with syntax highlighting -->
+  <div id="right-panel">
+    <div id="editor-wrap">
+      <!-- Gutter -->
+      <div id="gutter"></div>
+      <!-- Editor container: pre (highlight) + textarea overlaid -->
+      <div id="editor-container">
+        <pre id="highlight-pre" aria-hidden="true"></pre>
+        <pre id="error-pre" aria-hidden="true"></pre>
+        <textarea id="editor"
+          spellcheck="false"
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          placeholder="// Escreva seu programa Pascal aqui…"></textarea>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══════════════  ERROR PANEL  ══════════════ -->
+<div id="bottom-panel">
+  <table id="errtable">
+    <thead>
+      <tr>
+        <th style="width:28%">Linha</th>
+        <th>Mensagem</th>
+      </tr>
+    </thead>
+    <tbody id="errtable-body">
+      <tr><td colspan="2" class="msg-neutral">Clique em Compilar para analisar o código</td></tr>
+    </tbody>
+  </table>
+</div>
+
+
+<input type="file" id="file-input" accept=".pas,.txt,.pascal" style="display:none" />
+
+<script src="lexer.js"></script>
+<script src="parser.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
