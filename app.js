@@ -1,17 +1,19 @@
 
 'use strict';
 
-// ── DOM refs ─────────────────────────────────────────────────────
+// ── Referências aos elementos do DOM ──────────────────────────────
 const editor        = document.getElementById('editor');
 const highlightPre  = document.getElementById('highlight-pre');
 const gutter        = document.getElementById('gutter');
 const symBody       = document.getElementById('symtable-body');
 const fileInput     = document.getElementById('file-input');
-// ── State ─────────────────────────────────────────────────────────
-let currentFile = 'programa.pas';
-let debTimer    = null;
+
+// ── Estado global ─────────────────────────────────────────────────
+let currentFile = 'programa.pas'; // nome do arquivo atualmente aberto
+let debTimer    = null;           // temporizador do debounce de análise automática
 
 
+// Lista de palavras reservadas usadas pelo realce de sintaxe (highlight)
 const KEYWORDS_RE = [
   'program','begin','end','var','const','procedure','function',
   'if','then','else','while','do','repeat','until',
@@ -22,26 +24,32 @@ const KEYWORDS_RE = [
   'true','false','record','type','array','of',
 ].join('|');
 
-// Single regex that matches all meaningful tokens in priority order.
-// Groups: 1=lineComment 2=blockCmt1 3=blockCmt2 4=string 5=real 6=int 7=keyword 8=op2 9=op1 10=pun
+// Expressão regular única que identifica todos os tokens visualmente relevantes,
+// em ordem de prioridade (comentários > strings > números > palavras-chave > operadores > pontuação).
+// Grupos: 1=comentário // 2=comentário {} 3=comentário (*) 4=string 5=real 6=inteiro 7=palavra-chave 8=op2chars 9=op1char 10=pontuação
 const HIGHLIGHT_RE = new RegExp(
-  '(\\/\\/[^\\n]*)' +                          // 1: // comment
-  '|(\\{[^}]*\\})' +                            // 2: { comment }
-  '|(\\(\\*[\\s\\S]*?\\*\\))' +                 // 3: (* comment *)
-  "|('[^'\\n]*')" +                             // 4: 'string'
-  '|(\\b\\d+\\.\\d+\\b)' +                      // 5: real number
-  '|(\\b\\d+\\b)' +                             // 6: integer
-  '|(\\b(?:' + KEYWORDS_RE + ')\\b)' +          // 7: keywords
-  '|(:=|<>|<=|>=)' +                            // 8: two-char operators
-  '|([=<>+\\-*/])' +                            // 9: single-char operators
-  '|([;:,.(\\)\\[\\]])',                        // 10: punctuation
+  '(\\/\\/[^\\n]*)' +                          // 1: comentário de linha //
+  '|(\\{[^}]*\\})' +                            // 2: comentário de bloco { }
+  '|(\\(\\*[\\s\\S]*?\\*\\))' +                 // 3: comentário de bloco (* *)
+  "|('[^'\\n]*')" +                             // 4: literal de texto 'string'
+  '|(\\b\\d+\\.\\d+\\b)' +                      // 5: número real
+  '|(\\b\\d+\\b)' +                             // 6: número inteiro
+  '|(\\b(?:' + KEYWORDS_RE + ')\\b)' +          // 7: palavras reservadas
+  '|(:=|<>|<=|>=)' +                            // 8: operadores de dois caracteres
+  '|([=<>+\\-*/])' +                            // 9: operadores de um caractere
+  '|([;:,.(\\)\\[\\]])',                        // 10: pontuação
   'gi'
 );
 
+// Escapa caracteres especiais de HTML para exibição segura no DOM
 function escHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+/**
+ * Aplica realce de sintaxe ao código-fonte e retorna HTML com spans coloridos.
+ * Percorre o código com HIGHLIGHT_RE e classifica cada trecho reconhecido.
+ */
 function syntaxHighlight(code) {
   let result = '';
   let last   = 0;
@@ -49,31 +57,38 @@ function syntaxHighlight(code) {
   HIGHLIGHT_RE.lastIndex = 0;
 
   while ((m = HIGHLIGHT_RE.exec(code)) !== null) {
+    // Texto sem correspondência entre o último match e o atual: exibe sem cor
     if (m.index > last) result += escHtml(code.slice(last, m.index));
 
     const tok = m[0];
     let cls;
-    if      (m[1] || m[2] || m[3]) cls = 'hl-cmt';
-    else if (m[4])                  cls = 'hl-str';
-    else if (m[5] || m[6])         cls = 'hl-num';
-    else if (m[7])                  cls = 'hl-kw';
-    else if (m[8] || m[9])         cls = 'hl-op';
-    else                            cls = 'hl-pun';
+    if      (m[1] || m[2] || m[3]) cls = 'hl-cmt'; // comentário
+    else if (m[4])                  cls = 'hl-str'; // string
+    else if (m[5] || m[6])         cls = 'hl-num'; // número
+    else if (m[7])                  cls = 'hl-kw';  // palavra reservada
+    else if (m[8] || m[9])         cls = 'hl-op';  // operador
+    else                            cls = 'hl-pun'; // pontuação
 
     result += `<span class="${cls}">${escHtml(tok)}</span>`;
     last = HIGHLIGHT_RE.lastIndex;
   }
 
+  // Texto restante após o último match
   if (last < code.length) result += escHtml(code.slice(last));
   return result;
 }
 
+// Atualiza o painel de realce de sintaxe com o conteúdo atual do editor
 function updateHighlight() {
-  // Trailing newline ensures last line has correct height in pre
+  // A quebra de linha extra garante que a última linha tenha altura correta no <pre>
   highlightPre.innerHTML = syntaxHighlight(editor.value) + '\n';
   syncScroll();
 }
 
+/**
+ * Sincroniza a posição de rolagem entre as três camadas do editor:
+ * highlight-pre (colorida), error-pre (sublinhados) e gutter (números de linha).
+ */
 function syncScroll() {
   highlightPre.scrollTop  = editor.scrollTop;
   highlightPre.scrollLeft = editor.scrollLeft;
@@ -82,12 +97,13 @@ function syncScroll() {
     errPre.scrollTop  = editor.scrollTop;
     errPre.scrollLeft = editor.scrollLeft;
   }
-  gutter.scrollTop        = editor.scrollTop;
+  gutter.scrollTop = editor.scrollTop;
 }
 
 editor.addEventListener('scroll', syncScroll);
 
 
+// Atualiza o gutter (coluna de números de linha) contando as quebras de linha do editor
 function updateGutter() {
   const n = (editor.value.match(/\n/g) || []).length + 1;
   let s = '';
@@ -96,17 +112,20 @@ function updateGutter() {
 }
 
 
+/**
+ * Pipeline de compilação léxica:
+ * 1. Executa o analisador léxico sobre o código-fonte atual.
+ * 2. Atualiza a tabela de símbolos com os tokens encontrados.
+ * 3. Renderiza o overlay de erros (sublinhado vermelho) sobre o editor.
+ * Retorna a lista de erros léxicos.
+ */
 function compile() {
   try {
     const source = editor.value;
     const lexResult = Lexer.lexer(source);
 
-    const combinedTokens = [
-      ...Lexer.PREDEFINED_SYMBOLS,
-      ...lexResult.tokens
-    ];
-
-    renderSymbolTable(combinedTokens);
+    // Exibe apenas os tokens detectados no programa (sem os pré-definidos da linguagem)
+    renderSymbolTable(lexResult.tokens);
     renderErrorOverlay(lexResult.errors, source);
 
     return lexResult.errors;
@@ -117,8 +136,11 @@ function compile() {
 }
 
 
-let hasScrolledToSourceTokens = false;
-
+/**
+ * Preenche a tabela de símbolos com os tokens do programa.
+ * Cada linha da tabela é clicável e leva o cursor à linha correspondente no editor.
+ * Tokens de erro recebem a classe CSS 'err-row' para destaque visual.
+ */
 function renderSymbolTable(tokens) {
   symBody.innerHTML = '';
   if (!tokens.length) {
@@ -127,16 +149,10 @@ function renderSymbolTable(tokens) {
   }
   const frag = document.createDocumentFragment();
   let n = 1;
-  let firstSourceRow = null;
 
   for (const t of tokens) {
     const tr = document.createElement('tr');
     if (t.error) tr.classList.add('err-row');
-    if (t.line === '-') {
-      tr.classList.add('predef-row');
-    } else if (!firstSourceRow) {
-      firstSourceRow = tr;
-    }
 
     [n++, t.line, t.token, t.lexema].forEach(v => {
       const td = document.createElement('td');
@@ -148,80 +164,88 @@ function renderSymbolTable(tokens) {
     frag.appendChild(tr);
   }
   symBody.appendChild(frag);
-
-  if (!hasScrolledToSourceTokens && firstSourceRow) {
-    setTimeout(() => {
-      const wrap = document.getElementById('symtable-wrap');
-      if (wrap) {
-        wrap.scrollTop = firstSourceRow.offsetTop - wrap.offsetTop;
-      }
-    }, 10);
-    hasScrolledToSourceTokens = true;
-  }
 }
 
 
+/**
+ * Gera o overlay de sublinhado ondulado vermelho sobre tokens inválidos no editor.
+ * Constrói o conteúdo do <pre id="error-pre"> com spans .err-squiggle
+ * posicionados exatamente sobre os caracteres inválidos.
+ */
 function renderErrorOverlay(errors, source) {
   const errPre = document.getElementById('error-pre');
   if (!errPre) return;
-  const lines = source.split('\n');
-  const errorMap = [];
+
+  const linhas = source.split('\n');
+  // Agrupa os erros por índice de linha (base 0) para montagem eficiente do HTML
+  const mapaErros = [];
 
   for (const e of errors) {
-    if (!e.line || e.line > lines.length) continue;
+    if (!e.line || e.line > linhas.length) continue;
     const lIdx = e.line - 1;
-    if (!errorMap[lIdx]) errorMap[lIdx] = [];
-    const len = e.lexema ? e.lexema.length : 1;
-    errorMap[lIdx].push({ col: e.col, len });
+    if (!mapaErros[lIdx]) mapaErros[lIdx] = [];
+    const comprimento = e.lexema ? e.lexema.length : 1;
+    mapaErros[lIdx].push({ col: e.col, len: comprimento });
   }
 
   let html = '';
-  for (let i = 0; i < lines.length; i++) {
-    const lineStr = lines[i];
-    if (!errorMap[i]) {
-      html += escHtml(lineStr) + '\n';
+  for (let i = 0; i < linhas.length; i++) {
+    const linhaTxt = linhas[i];
+    if (!mapaErros[i]) {
+      // Linha sem erros: texto normal (transparente no overlay)
+      html += escHtml(linhaTxt) + '\n';
       continue;
     }
-    errorMap[i].sort((a, b) => a.col - b.col);
-    let colIdx = 1;
-    let lineHtml = '';
-    for (const err of errorMap[i]) {
-      if (err.col < colIdx) continue;
-      lineHtml += escHtml(lineStr.substring(colIdx - 1, err.col - 1));
-      let errText = lineStr.substring(err.col - 1, err.col - 1 + err.len);
-      if (!errText) errText = ' '; // if error at EOF
-      lineHtml += `<span class="err-squiggle">${escHtml(errText)}</span>`;
-      colIdx = err.col + err.len;
+    // Ordena erros da linha da esquerda para a direita
+    mapaErros[i].sort((a, b) => a.col - b.col);
+    let colAtual = 1;
+    let linhaHtml = '';
+    for (const err of mapaErros[i]) {
+      if (err.col < colAtual) continue;
+      // Texto antes do erro (sem sublinhado)
+      linhaHtml += escHtml(linhaTxt.substring(colAtual - 1, err.col - 1));
+      // Trecho com erro (sublinhado ondulado vermelho)
+      let trechoErro = linhaTxt.substring(err.col - 1, err.col - 1 + err.len);
+      if (!trechoErro) trechoErro = ' '; // garante ao menos um caractere sublinhado
+      linhaHtml += `<span class="err-squiggle">${escHtml(trechoErro)}</span>`;
+      colAtual = err.col + err.len;
     }
-    lineHtml += escHtml(lineStr.substring(colIdx - 1));
-    html += lineHtml + '\n';
+    // Restante da linha após o último erro
+    linhaHtml += escHtml(linhaTxt.substring(colAtual - 1));
+    html += linhaHtml + '\n';
   }
   errPre.innerHTML = html;
 }
 
 
+/**
+ * Move o cursor do editor para o início da linha indicada e a centraliza na tela.
+ */
 function jumpToLine(lineNum) {
   if (!lineNum || lineNum < 1) return;
-  const lines  = editor.value.split('\n');
+  const linhas = editor.value.split('\n');
   let charPos  = 0;
-  const target = Math.min(lineNum - 1, lines.length - 1);
-  for (let i = 0; i < target; i++) charPos += lines[i].length + 1;
+  const alvo   = Math.min(lineNum - 1, linhas.length - 1);
+  for (let i = 0; i < alvo; i++) charPos += linhas[i].length + 1;
   editor.focus();
-  editor.setSelectionRange(charPos, charPos + (lines[target] || '').length);
-  const lineH = parseFloat(getComputedStyle(editor).lineHeight) || 19;
-  editor.scrollTop = Math.max(0, (target - 3) * lineH);
+  editor.setSelectionRange(charPos, charPos + (linhas[alvo] || '').length);
+  const alturaLinha = parseFloat(getComputedStyle(editor).lineHeight) || 19;
+  editor.scrollTop  = Math.max(0, (alvo - 3) * alturaLinha);
   syncScroll();
 }
 
 
+// Ao digitar: atualiza gutter, realce de sintaxe e agenda análise léxica com debounce
 editor.addEventListener('input', () => {
   updateGutter();
   updateHighlight();
   scheduleAnalysis();
 });
 
+// Tratamento de teclas especiais no editor
 editor.addEventListener('keydown', (e) => {
   if (e.key === 'Tab') {
+    // Substitui Tab por 4 espaços para manter indentação consistente
     e.preventDefault();
     const s = editor.selectionStart;
     const v = editor.value;
@@ -234,38 +258,48 @@ editor.addEventListener('keydown', (e) => {
   if (e.ctrlKey && e.key === 'n') { e.preventDefault(); newFile(); }
 });
 
+// Agenda a análise léxica com debounce (padrão: 500ms após a última digitação)
 function scheduleAnalysis(ms) {
   clearTimeout(debTimer);
   debTimer = setTimeout(compile, ms != null ? ms : 500);
 }
 
 
+/**
+ * Executado ao clicar no botão "Compilar".
+ * Se houver erros léxicos, exibe alerta e interrompe.
+ * Caso contrário, remove comentários e espaços desnecessários do código.
+ */
 function handleExplicitCompile() {
-  const errors = compile();
+  const erros = compile();
 
-  // Verifica se há erros léxicos
-  if (errors && errors.length > 0) {
+  // Bloqueia a compilação se houver tokens inválidos
+  if (erros && erros.length > 0) {
     alert('Foram encontrados erros no código. Verifique os tokens sublinhados em vermelho.');
     return;
   }
 
-  let code = editor.value;
+  let codigo = editor.value;
 
-  // 1. Remove single line comments
-  code = code.replace(/\/\/.*$/gm, '');
+  // Remove comentários de linha: // até o fim da linha
+  codigo = codigo.replace(/\/\/.*$/gm, '');
 
-  // 2. Remove multi-line comments { ... }
-  code = code.replace(/\{[\s\S]*?\}/g, '');
+  // Remove comentários de bloco: { ... }
+  codigo = codigo.replace(/\{[\s\S]*?\}/g, '');
 
-  // 3. Remove multi-line comments (* ... *)
-  code = code.replace(/\(\*[\s\S]*?\*\)/g, '');
+  // Remove comentários de bloco: (* ... *)
+  codigo = codigo.replace(/\(\*[\s\S]*?\*\)/g, '');
 
-  // 4. Remove linhas em branco e espaços de indentação
-  code = code.replace(/^[ \t]+/gm, ''); // espaços no início (indentação)
-  code = code.replace(/[ \t]+$/gm, ''); // espaços no fim
-  code = code.replace(/^\s*[\r\n]/gm, ''); // linhas em branco
+  // Remove espaços no início de cada linha (indentação)
+  codigo = codigo.replace(/^[ \t]+/gm, '');
 
-  editor.value = code;
+  // Remove espaços no final de cada linha
+  codigo = codigo.replace(/[ \t]+$/gm, '');
+
+  // Remove linhas completamente em branco
+  codigo = codigo.replace(/^\s*[\r\n]/gm, '');
+
+  editor.value = codigo;
   updateGutter();
   updateHighlight();
   compile();
@@ -274,6 +308,9 @@ function handleExplicitCompile() {
 document.getElementById('btn-compile').addEventListener('click', handleExplicitCompile);
 
 
+// ── Gerenciamento de arquivos ─────────────────────────────────────
+
+// Cria um novo arquivo (confirma antes de descartar alterações)
 function newFile() {
   if (editor.value.trim() && !confirm('Descartar alterações?')) return;
   editor.value = '';
@@ -282,8 +319,10 @@ function newFile() {
   symBody.innerHTML = '<tr><td colspan="4" class="tbl-placeholder">Nenhum token</td></tr>';
 }
 
+// Abre o seletor de arquivos do sistema operacional
 function openFile() { fileInput.click(); }
 
+// Faz o download do conteúdo atual do editor como arquivo de texto
 function saveFile() {
   const blob = new Blob([editor.value], { type: 'text/plain;charset=utf-8' });
   const url  = URL.createObjectURL(blob);
@@ -292,6 +331,7 @@ function saveFile() {
   document.body.removeChild(a); URL.revokeObjectURL(url);
 }
 
+// Lê o arquivo selecionado e carrega seu conteúdo no editor
 fileInput.addEventListener('change', () => {
   const file = fileInput.files[0];
   if (!file) return;
@@ -305,6 +345,7 @@ fileInput.addEventListener('change', () => {
   fileInput.value = '';
 });
 
+// ── Listeners dos menus e botões da barra de ferramentas ──────────
 document.getElementById('menu-new').addEventListener('click', newFile);
 document.getElementById('menu-open').addEventListener('click', openFile);
 document.getElementById('menu-save').addEventListener('click', saveFile);
@@ -320,8 +361,7 @@ document.getElementById('tb-undo').addEventListener('click', () => document.exec
 document.getElementById('tb-redo').addEventListener('click', () => document.execCommand('redo'));
 
 
-
-
+// ── Inicialização com programa de exemplo ─────────────────────────
 editor.value = `program Exemplo;
 var
   A, B : integer;
