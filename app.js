@@ -6,12 +6,6 @@ const editor        = document.getElementById('editor');
 const highlightPre  = document.getElementById('highlight-pre');
 const gutter        = document.getElementById('gutter');
 const symBody       = document.getElementById('symtable-body');
-const errBody       = document.getElementById('errtable-body');
-const treeContainer = document.getElementById('tree-container');
-const tabSymbols    = document.getElementById('tab-symbols');
-const tabTree       = document.getElementById('tab-tree');
-const panelSym      = document.getElementById('panel-symbols');
-const panelTree     = document.getElementById('panel-tree');
 const fileInput     = document.getElementById('file-input');
 // ── State ─────────────────────────────────────────────────────────
 let currentFile = 'programa.pas';
@@ -106,11 +100,6 @@ function compile() {
   try {
     const source = editor.value;
     const lexResult = Lexer.lexer(source);
-    const parseResult = Parser.parse(lexResult.tokens);
-
-    const allErrors = lexResult.errors.concat(parseResult.errors || []);
-    const warnings = parseResult.warnings || [];
-    allErrors.sort((a, b) => a.line === b.line ? a.col - b.col : a.line - b.line);
 
     const combinedTokens = [
       ...Lexer.PREDEFINED_SYMBOLS,
@@ -118,15 +107,11 @@ function compile() {
     ];
 
     renderSymbolTable(combinedTokens);
-    renderErrors(allErrors, warnings);
-    renderDerivationTree(parseResult.tree);
-    renderErrorOverlay(allErrors, warnings, source);
-    
-    return allErrors;
+    renderErrorOverlay(lexResult.errors, source);
+
+    return lexResult.errors;
   } catch (e) {
     console.error(e);
-    errBody.innerHTML =
-      `<tr><td colspan="2" class="msg-error">Erro interno: ${escHtml(e.message)}</td></tr>`;
     return [{ msg: e.message }];
   }
 }
@@ -176,47 +161,19 @@ function renderSymbolTable(tokens) {
 }
 
 
-function renderErrors(errors, warnings = []) {
-  errBody.innerHTML = '';
-  if (!errors.length && !warnings.length) {
-    errBody.innerHTML = '<tr><td colspan="2" class="msg-ok">Nenhum erro encontrado</td></tr>';
-    return;
-  }
-  const frag = document.createDocumentFragment();
-  const buildRow = (e, isWarn) => {
-    const tr = document.createElement('tr');
-    tr.className = isWarn ? 'warn-row' : 'err-row';
-    const tl = document.createElement('td');
-    const tm = document.createElement('td');
-    tl.textContent = `Linha ${e.line}, Col ${e.col}`;
-    tm.textContent = (isWarn ? '[Aviso] ' : '') + (e.msg || `Token inválido: "${e.lexema}"`);
-    tr.append(tl, tm);
-    tr.addEventListener('click', () => jumpToLine(e.line));
-    frag.appendChild(tr);
-  };
-  for (const e of errors) buildRow(e, false);
-  for (const w of warnings) buildRow(w, true);
-  errBody.appendChild(frag);
-}
-
-
-function renderErrorOverlay(errors, warnings, source) {
+function renderErrorOverlay(errors, source) {
   const errPre = document.getElementById('error-pre');
   if (!errPre) return;
   const lines = source.split('\n');
   const errorMap = [];
 
-  const add = (list, isWarn) => {
-    for (const e of list) {
-      if (!e.line || e.line > lines.length) continue;
-      const lIdx = e.line - 1;
-      if (!errorMap[lIdx]) errorMap[lIdx] = [];
-      const len = e.lexema ? e.lexema.length : 1;
-      errorMap[lIdx].push({ col: e.col, len, isWarn });
-    }
-  };
-  add(errors, false);
-  add(warnings, true);
+  for (const e of errors) {
+    if (!e.line || e.line > lines.length) continue;
+    const lIdx = e.line - 1;
+    if (!errorMap[lIdx]) errorMap[lIdx] = [];
+    const len = e.lexema ? e.lexema.length : 1;
+    errorMap[lIdx].push({ col: e.col, len });
+  }
 
   let html = '';
   for (let i = 0; i < lines.length; i++) {
@@ -233,72 +190,13 @@ function renderErrorOverlay(errors, warnings, source) {
       lineHtml += escHtml(lineStr.substring(colIdx - 1, err.col - 1));
       let errText = lineStr.substring(err.col - 1, err.col - 1 + err.len);
       if (!errText) errText = ' '; // if error at EOF
-      const cls = err.isWarn ? 'warn-squiggle' : 'err-squiggle';
-      lineHtml += `<span class="${cls}">${escHtml(errText)}</span>`;
+      lineHtml += `<span class="err-squiggle">${escHtml(errText)}</span>`;
       colIdx = err.col + err.len;
     }
     lineHtml += escHtml(lineStr.substring(colIdx - 1));
     html += lineHtml + '\n';
   }
   errPre.innerHTML = html;
-}
-
-
-function renderDerivationTree(tree) {
-  treeContainer.innerHTML = '';
-  treeContainer.appendChild(buildTreeDOM(tree, true));
-}
-
-/**
- * Builds an interactive DOM tree from a ParseNode.
- * @param {{ name:string, children:any[] }} node
- * @param {boolean} expanded  — start expanded?
- */
-function buildTreeDOM(node, expanded = true) {
-  if (!node) return document.createTextNode('');
-
-  const hasChildren = node.children && node.children.length > 0;
-  const wrapper = document.createElement('div');
-  wrapper.className = hasChildren ? 'tree-node' : 'tree-node tree-leaf';
-
-  // Label row
-  const label = document.createElement('div');
-  label.className = 'tree-label';
-
-  // Toggle icon
-  const toggle = document.createElement('span');
-  toggle.className = 'tree-toggle';
-  toggle.textContent = hasChildren ? (expanded ? '▼' : '▶') : '◦';
-  label.appendChild(toggle);
-
-  // Node name (may contain HTML spans from the parser)
-  const nameSpan = document.createElement('span');
-  nameSpan.className = 'tree-name';
-  nameSpan.innerHTML = node.name; // safe: parser uses escapeHtml internally
-  label.appendChild(nameSpan);
-
-  wrapper.appendChild(label);
-
-  if (hasChildren) {
-    const childrenDiv = document.createElement('div');
-    childrenDiv.className = 'tree-children' + (expanded ? '' : ' collapsed');
-
-    // Only expand top 3 levels by default
-    const childExpanded = expanded; // same level propagation simplified
-
-    for (const child of node.children) {
-      if (child) childrenDiv.appendChild(buildTreeDOM(child, false));
-    }
-
-    wrapper.appendChild(childrenDiv);
-
-    label.addEventListener('click', () => {
-      const collapsed = childrenDiv.classList.toggle('collapsed');
-      toggle.textContent = collapsed ? '▶' : '▼';
-    });
-  }
-
-  return wrapper;
 }
 
 
@@ -342,41 +240,31 @@ function scheduleAnalysis(ms) {
 }
 
 
-tabSymbols.addEventListener('click', () => {
-  tabSymbols.classList.add('active');   tabTree.classList.remove('active');
-  panelSym.classList.add('active');     panelTree.classList.remove('active');
-});
-tabTree.addEventListener('click', () => {
-  tabTree.classList.add('active');      tabSymbols.classList.remove('active');
-  panelTree.classList.add('active');    panelSym.classList.remove('active');
-});
-
-
 function handleExplicitCompile() {
-  const allErrors = compile();
-  
-  // Verifica se há erros (ignorando warnings que tem isWarning == true)
-  if (allErrors && allErrors.some(e => !e.isWarning)) {
-    alert('Foram encontrados erros no código. Verifique o painel inferior para mais detalhes.');
+  const errors = compile();
+
+  // Verifica se há erros léxicos
+  if (errors && errors.length > 0) {
+    alert('Foram encontrados erros no código. Verifique os tokens sublinhados em vermelho.');
     return;
   }
-  
+
   let code = editor.value;
-  
+
   // 1. Remove single line comments
   code = code.replace(/\/\/.*$/gm, '');
-  
+
   // 2. Remove multi-line comments { ... }
   code = code.replace(/\{[\s\S]*?\}/g, '');
-  
+
   // 3. Remove multi-line comments (* ... *)
   code = code.replace(/\(\*[\s\S]*?\*\)/g, '');
-  
+
   // 4. Remove linhas em branco e espaços de indentação
   code = code.replace(/^[ \t]+/gm, ''); // espaços no início (indentação)
   code = code.replace(/[ \t]+$/gm, ''); // espaços no fim
   code = code.replace(/^\s*[\r\n]/gm, ''); // linhas em branco
-  
+
   editor.value = code;
   updateGutter();
   updateHighlight();
@@ -392,8 +280,6 @@ function newFile() {
   currentFile = 'programa.pas';
   updateGutter(); updateHighlight();
   symBody.innerHTML = '<tr><td colspan="4" class="tbl-placeholder">Nenhum token</td></tr>';
-  errBody.innerHTML = '<tr><td colspan="2" class="msg-neutral">Clique em Compilar para analisar</td></tr>';
-  treeContainer.innerHTML = '<div class="tree-placeholder">Compile para gerar a árvore de derivação.</div>';
 }
 
 function openFile() { fileInput.click(); }

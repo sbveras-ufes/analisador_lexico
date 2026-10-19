@@ -41,37 +41,23 @@
 <!-- ══════════════  MAIN SPLIT  ══════════════ -->
 <div id="main">
 
-  <!-- LEFT: tabbed symbol table / derivation tree -->
+  <!-- LEFT: symbol table -->
   <div id="left-panel">
-    <div id="tab-bar">
-      <button class="tab active" id="tab-symbols">Tabela de Símbolos</button>
-      <button class="tab"        id="tab-tree">Árvore de Derivação</button>
-    </div>
-
-    <!-- Symbol Table panel -->
-    <div id="panel-symbols" class="tab-panel active">
-      <div id="symtable-wrap">
-        <table id="symtable">
-          <thead>
-            <tr>
-              <th style="width:40px">ID</th>
-              <th style="width:50px">Linha</th>
-              <th>Token</th>
-              <th style="width:88px">Lexema</th>
-            </tr>
-          </thead>
-          <tbody id="symtable-body">
-            <tr><td colspan="4" class="tbl-placeholder">Clique em <b>Compilar</b></td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- Derivation Tree panel -->
-    <div id="panel-tree" class="tab-panel">
-      <div id="tree-container">
-        <div class="tree-placeholder">Clique em <b>Compilar</b> para gerar a árvore de derivação.</div>
-      </div>
+    <div id="panel-header">Tabela de Símbolos</div>
+    <div id="symtable-wrap">
+      <table id="symtable">
+        <thead>
+          <tr>
+            <th style="width:40px">ID</th>
+            <th style="width:50px">Linha</th>
+            <th>Token</th>
+            <th style="width:88px">Lexema</th>
+          </tr>
+        </thead>
+        <tbody id="symtable-body">
+          <tr><td colspan="4" class="tbl-placeholder">Clique em <b>Compilar</b></td></tr>
+        </tbody>
+      </table>
     </div>
   </div>
 
@@ -96,26 +82,9 @@
 
 </div>
 
-<!-- ══════════════  ERROR PANEL  ══════════════ -->
-<div id="bottom-panel">
-  <table id="errtable">
-    <thead>
-      <tr>
-        <th style="width:28%">Linha</th>
-        <th>Mensagem</th>
-      </tr>
-    </thead>
-    <tbody id="errtable-body">
-      <tr><td colspan="2" class="msg-neutral">Clique em Compilar para analisar o código</td></tr>
-    </tbody>
-  </table>
-</div>
-
-
 <input type="file" id="file-input" accept=".pas,.txt,.pascal" style="display:none" />
 
 <script src="lexer.js"></script>
-<script src="parser.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
