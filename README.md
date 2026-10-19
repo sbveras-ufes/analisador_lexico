@@ -176,13 +176,4 @@ As três camadas do editor têm scroll independente. O evento `scroll` da textar
 | Comentário `(*` não fechado | `ERRO` | `(* comentário sem *)` |
 
 Tokens de erro aparecem sublinhados em vermelho no editor e destacados em rosa na tabela de símbolos.
-
----
-
-## Atalhos de Teclado
-
-| Atalho | Ação |
-|--------|------|
-| `Ctrl+S` | Salvar arquivo |
-| `Ctrl+N` | Novo arquivo |
-| `Tab` | Inserir 4 espaços |
+ |

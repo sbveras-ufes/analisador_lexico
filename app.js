@@ -1,16 +1,16 @@
 
 'use strict';
 
-// ── Referências aos elementos do DOM ──────────────────────────────
+// ── DOM refs ─────────────────────────────────────────────────────
 const editor        = document.getElementById('editor');
 const highlightPre  = document.getElementById('highlight-pre');
 const gutter        = document.getElementById('gutter');
 const symBody       = document.getElementById('symtable-body');
 const fileInput     = document.getElementById('file-input');
+// ── State ─────────────────────────────────────────────────────────
+let currentFile = 'programa.pas';
+let debTimer    = null;
 
-// ── Estado global ─────────────────────────────────────────────────
-let currentFile = 'programa.pas'; // nome do arquivo atualmente aberto
-let debTimer    = null;           // temporizador do debounce de análise automática
 
 
 // Lista de palavras reservadas usadas pelo realce de sintaxe (highlight)
@@ -57,17 +57,16 @@ function syntaxHighlight(code) {
   HIGHLIGHT_RE.lastIndex = 0;
 
   while ((m = HIGHLIGHT_RE.exec(code)) !== null) {
-    // Texto sem correspondência entre o último match e o atual: exibe sem cor
     if (m.index > last) result += escHtml(code.slice(last, m.index));
 
     const tok = m[0];
     let cls;
-    if      (m[1] || m[2] || m[3]) cls = 'hl-cmt'; // comentário
-    else if (m[4])                  cls = 'hl-str'; // string
-    else if (m[5] || m[6])         cls = 'hl-num'; // número
-    else if (m[7])                  cls = 'hl-kw';  // palavra reservada
-    else if (m[8] || m[9])         cls = 'hl-op';  // operador
-    else                            cls = 'hl-pun'; // pontuação
+    if      (m[1] || m[2] || m[3]) cls = 'hl-cmt';
+    else if (m[4])                  cls = 'hl-str';
+    else if (m[5] || m[6])         cls = 'hl-num';
+    else if (m[7])                  cls = 'hl-kw';
+    else if (m[8] || m[9])         cls = 'hl-op';
+    else                            cls = 'hl-pun';
 
     result += `<span class="${cls}">${escHtml(tok)}</span>`;
     last = HIGHLIGHT_RE.lastIndex;
@@ -78,7 +77,6 @@ function syntaxHighlight(code) {
   return result;
 }
 
-// Atualiza o painel de realce de sintaxe com o conteúdo atual do editor
 function updateHighlight() {
   // A quebra de linha extra garante que a última linha tenha altura correta no <pre>
   highlightPre.innerHTML = syntaxHighlight(editor.value) + '\n';
@@ -124,7 +122,6 @@ function compile() {
     const source = editor.value;
     const lexResult = Lexer.lexer(source);
 
-    // Exibe apenas os tokens detectados no programa (sem os pré-definidos da linguagem)
     renderSymbolTable(lexResult.tokens);
     renderErrorOverlay(lexResult.errors, source);
 
@@ -164,14 +161,13 @@ function renderSymbolTable(tokens) {
     frag.appendChild(tr);
   }
   symBody.appendChild(frag);
+
+  // Rola automaticamente para o fim da tabela após cada atualização
+  const wrap = document.getElementById('symtable-wrap');
+  if (wrap) wrap.scrollTop = wrap.scrollHeight;
 }
 
 
-/**
- * Gera o overlay de sublinhado ondulado vermelho sobre tokens inválidos no editor.
- * Constrói o conteúdo do <pre id="error-pre"> com spans .err-squiggle
- * posicionados exatamente sobre os caracteres inválidos.
- */
 function renderErrorOverlay(errors, source) {
   const errPre = document.getElementById('error-pre');
   if (!errPre) return;
@@ -218,9 +214,6 @@ function renderErrorOverlay(errors, source) {
 }
 
 
-/**
- * Move o cursor do editor para o início da linha indicada e a centraliza na tela.
- */
 function jumpToLine(lineNum) {
   if (!lineNum || lineNum < 1) return;
   const linhas = editor.value.split('\n');
@@ -235,17 +228,14 @@ function jumpToLine(lineNum) {
 }
 
 
-// Ao digitar: atualiza gutter, realce de sintaxe e agenda análise léxica com debounce
 editor.addEventListener('input', () => {
   updateGutter();
   updateHighlight();
   scheduleAnalysis();
 });
 
-// Tratamento de teclas especiais no editor
 editor.addEventListener('keydown', (e) => {
   if (e.key === 'Tab') {
-    // Substitui Tab por 4 espaços para manter indentação consistente
     e.preventDefault();
     const s = editor.selectionStart;
     const v = editor.value;
@@ -258,7 +248,6 @@ editor.addEventListener('keydown', (e) => {
   if (e.ctrlKey && e.key === 'n') { e.preventDefault(); newFile(); }
 });
 
-// Agenda a análise léxica com debounce (padrão: 500ms após a última digitação)
 function scheduleAnalysis(ms) {
   clearTimeout(debTimer);
   debTimer = setTimeout(compile, ms != null ? ms : 500);
@@ -271,7 +260,7 @@ function scheduleAnalysis(ms) {
  * Caso contrário, remove comentários e espaços desnecessários do código.
  */
 function handleExplicitCompile() {
-  const erros = compile();
+  const errors = compile();
 
   // Bloqueia a compilação se houver tokens inválidos
   if (erros && erros.length > 0) {
@@ -308,9 +297,6 @@ function handleExplicitCompile() {
 document.getElementById('btn-compile').addEventListener('click', handleExplicitCompile);
 
 
-// ── Gerenciamento de arquivos ─────────────────────────────────────
-
-// Cria um novo arquivo (confirma antes de descartar alterações)
 function newFile() {
   if (editor.value.trim() && !confirm('Descartar alterações?')) return;
   editor.value = '';
@@ -319,7 +305,6 @@ function newFile() {
   symBody.innerHTML = '<tr><td colspan="4" class="tbl-placeholder">Nenhum token</td></tr>';
 }
 
-// Abre o seletor de arquivos do sistema operacional
 function openFile() { fileInput.click(); }
 
 // Faz o download do conteúdo atual do editor como arquivo de texto
@@ -331,7 +316,6 @@ function saveFile() {
   document.body.removeChild(a); URL.revokeObjectURL(url);
 }
 
-// Lê o arquivo selecionado e carrega seu conteúdo no editor
 fileInput.addEventListener('change', () => {
   const file = fileInput.files[0];
   if (!file) return;
